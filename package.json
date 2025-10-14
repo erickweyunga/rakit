@@ -1,0 +1,78 @@
+{
+  "name": "rakit",
+  "version": "0.0.1",
+  "description": "React authentication library with JWT, cookies, refresh tokens, protected routes, and hooks for backend integration.",
+  "keywords": [
+    "react",
+    "authentication",
+    "jwt",
+    "cookies",
+    "refresh-token",
+    "react-hooks",
+    "typescript",
+    "protected-routes",
+    "rakit"
+  ],
+  "author": "Eric Kweyunga <maverickweyunga@gmail.com>",
+  "license": "MIT",
+  "type": "module",
+  "main": "dist/index.js",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build:js": "bun build index.ts --outdir dist",
+    "build": "bun run build:js && bun run types",
+    "types": "bun tsc",
+    "prepare": "bun run build",
+    "prepublishOnly": "bun run prepare"
+  },
+  "peerDependencies": {
+    "react": "^18 || ^19",
+    "react-dom": "^18 || ^19",
+    "react-router-dom": "^7",
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "@types/js-cookie": "^3.0.6",
+    "@types/react-dom": "^19.2.2",
+    "axios": "^1.12.2",
+    "js-cookie": "^3.0.5",
+    "jwt-decode": "^4.0.0"
+  },
+  "peerDependenciesMeta": {
+    "react-router-dom": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/erickweyunga/rakit.git"
+  },
+  "bugs": {
+    "url": "https://github.com/erickweyunga/rakit/issues"
+  },
+  "homepage": "https://github.com/erickweyunga/rakit#readme",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./provider": {
+      "import": "./dist/provider.js",
+      "require": "./dist/provider.js",
+      "types": "./dist/provider.d.ts"
+    },
+    "./protected": {
+      "import": "./dist/protected.js",
+      "require": "./dist/protected.js",
+      "types": "./dist/protected.d.ts"
+    }
+  }
+}
