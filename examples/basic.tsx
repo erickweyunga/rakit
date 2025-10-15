@@ -6,12 +6,16 @@ import {
   Route,
   Navigate,
 } from "react-router-dom";
-import { Rakit, useAuth } from "rakit";
+import { User, Rakit, useAuth } from "rakit";
 
-// --- App Provider Setup ---
+interface MyUser extends User {
+  name: string;
+  role: string;
+}
+
 export function App() {
   return (
-    <Rakit.Provider
+    <Rakit.Provider<MyUser>
       config={{
         endpoints: {
           login: "/api/auth/login",
@@ -20,9 +24,29 @@ export function App() {
           refresh: "/api/auth/refresh",
           me: "/api/auth/me",
         },
-        baseURL: "http://localhost:3000", // optional
-        tokenKey: "access_token", // optional
-        refreshTokenKey: "refresh_token", // optional
+        baseURL: "http://localhost:3000",
+        tokenKey: "access_token",
+        refreshTokenKey: "refresh_token",
+        middleware: {
+          onLogin: (data, ctx) => {
+            const user = data.user;
+            if (!user) return;
+            console.log("User logged in:", user);
+            ctx.setToken(user.name + "-token");
+          },
+          onLogout: (ctx) => {
+            console.log("User logged out");
+            ctx.removeToken();
+          },
+          onRefresh: (data, ctx) => {
+            console.log("Token refreshed", data);
+          },
+          onMe: (data, ctx) => {
+            const user = data.user;
+            if (!user) return;
+            console.log("Current user fetched:", user);
+          },
+        },
       }}
     >
       <Router>
@@ -32,7 +56,7 @@ export function App() {
   );
 }
 
-// --- Define Routes ---
+// --- Routes ---
 function AppRoutes() {
   return (
     <Routes>
@@ -50,9 +74,9 @@ function AppRoutes() {
   );
 }
 
-// --- Login Page Example ---
+// --- Login Page ---
 function LoginPage() {
-  const { login, isLoading } = useAuth();
+  const { login, isLoading } = useAuth<MyUser>();
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -87,22 +111,28 @@ function LoginPage() {
   );
 }
 
-// --- Protected Dashboard Example ---
+// --- Dashboard ---
 function Dashboard() {
-  const { user, logout } = useAuth();
+  const { user, logout, refetchUser } = useAuth<MyUser>();
 
   return (
     <div style={{ maxWidth: 600, margin: "auto", padding: 40 }}>
       <h1>Dashboard</h1>
-      <p>Welcome back, {user?.email}</p>
-      <button onClick={logout} style={{ marginTop: 20 }}>
+      <p>
+        Welcome back, {user?.name} ({user?.role})
+      </p>
+      <p>Email: {user?.email}</p>
+      <button onClick={logout} style={{ marginTop: 10 }}>
         Logout
+      </button>
+      <button onClick={refetchUser} style={{ marginTop: 10, marginLeft: 10 }}>
+        Refresh User
       </button>
     </div>
   );
 }
 
-// --- Loading Component ---
+// --- Loading ---
 function Loading() {
   return (
     <div style={{ padding: 40, textAlign: "center" }}>
@@ -111,6 +141,6 @@ function Loading() {
   );
 }
 
-// --- Render the App ---
+// --- Render App ---
 const root = createRoot(document.getElementById("root")!);
 root.render(<App />);

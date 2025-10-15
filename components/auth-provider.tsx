@@ -1,6 +1,5 @@
 import React, {
   createContext,
-  useContext,
   useState,
   useEffect,
   useCallback,
@@ -10,86 +9,89 @@ import ApiClient from "../utils/api-client";
 import type {
   RakitConfig,
   AuthState,
-  AuthUser,
+  User,
   LoginCredentials,
   RegisterCredentials,
   AuthResponse,
+  MiddlewareContext,
+  RefreshResponse,
+  MeResponse,
 } from "../types";
 
-interface AuthContextValue<T = Record<string, unknown>> extends AuthState<T> {
-  login: (credentials: LoginCredentials) => Promise<AuthResponse<T>>;
-  register: (credentials: RegisterCredentials<T>) => Promise<AuthResponse<T>>;
+interface AuthContextValue<TUser extends User = User> extends AuthState<TUser> {
+  login: (credentials: LoginCredentials) => Promise<AuthResponse<TUser>>;
+  register: (credentials: RegisterCredentials) => Promise<AuthResponse<TUser>>;
   logout: () => Promise<void>;
   refetchUser: () => Promise<void>;
 }
 
-const AuthContext = createContext<AuthContextValue | null>(null);
-
-// Export context for use in separate hook file
+const AuthContext = createContext<AuthContextValue<User> | null>(null);
 export { AuthContext };
 
-interface AuthProviderProps {
-  config: RakitConfig;
+interface AuthProviderProps<TUser extends User = User> {
+  config: RakitConfig<TUser>;
   children: React.ReactNode;
 }
 
-export function AuthProvider<T = Record<string, unknown>>({
+export function AuthProvider<TUser extends User = User>({
   config,
   children,
-}: AuthProviderProps): React.ReactElement {
-  const [authState, setAuthState] = useState<AuthState<T>>({
+}: AuthProviderProps<TUser>): React.ReactElement {
+  const [authState, setAuthState] = useState<AuthState<TUser>>({
     user: null,
     isAuthenticated: false,
     isLoading: true,
   });
 
-  const apiClientRef = useRef<ApiClient<T>>(null);
+  const apiClientRef = useRef<ApiClient<TUser> | null>(null);
 
   useEffect(() => {
-    apiClientRef.current = new ApiClient<T>({
-      baseURL: config.baseURL,
-      tokenKey: config.tokenKey,
-      refreshTokenKey: config.refreshTokenKey,
-      endpoints: config.endpoints,
-      onRefreshFailed: () => {
-        setAuthState({
-          user: null,
-          isAuthenticated: false,
-          isLoading: false,
-        });
+    apiClientRef.current = new ApiClient<TUser>({
+      ...config,
+      middleware: config.middleware as unknown as {
+        onLogin?: (
+          data: AuthResponse<User>,
+          ctx: MiddlewareContext<User>,
+        ) => void | Promise<void>;
+        onRegister?: (
+          data: AuthResponse<User>,
+          ctx: MiddlewareContext<User>,
+        ) => void | Promise<void>;
+        onLogout?: (ctx: MiddlewareContext<User>) => void | Promise<void>;
+        onRefresh?: (
+          data: RefreshResponse,
+          ctx: MiddlewareContext<User>,
+        ) => void | Promise<void>;
+        onMe?: (
+          data: MeResponse<User>,
+          ctx: MiddlewareContext<User>,
+        ) => void | Promise<void>;
       },
+      onRefreshFailed: () =>
+        setAuthState({ user: null, isAuthenticated: false, isLoading: false }),
     });
   }, [config]);
 
   const fetchUser = useCallback(async () => {
     if (!apiClientRef.current) return;
 
+    const tokenManager = apiClientRef.current.getTokenManager();
+    const token = tokenManager.getToken();
+
+    if (!token || tokenManager.isTokenExpired(token)) {
+      setAuthState({ user: null, isAuthenticated: false, isLoading: false });
+      return;
+    }
+
     try {
-      const tokenManager = apiClientRef.current.getTokenManager();
-      const token = tokenManager.getToken();
-
-      if (!token || tokenManager.isTokenExpired(token)) {
-        setAuthState({
-          user: null,
-          isAuthenticated: false,
-          isLoading: false,
-        });
-        return;
-      }
-
       const response = await apiClientRef.current.getCurrentUser();
       setAuthState({
-        user: response.user as AuthUser<T>,
+        user: response.user,
         isAuthenticated: true,
         isLoading: false,
       });
-    } catch (error) {
-      console.error("Failed to fetch user:", error);
-      setAuthState({
-        user: null,
-        isAuthenticated: false,
-        isLoading: false,
-      });
+    } catch {
+      setAuthState({ user: null, isAuthenticated: false, isLoading: false });
     }
   }, []);
 
@@ -97,69 +99,47 @@ export function AuthProvider<T = Record<string, unknown>>({
     fetchUser();
   }, [fetchUser]);
 
-  const login = useCallback(
-    async (credentials: LoginCredentials): Promise<AuthResponse<T>> => {
-      if (!apiClientRef.current) {
-        throw new Error("API client not initialized");
-      }
+  const login = useCallback(async (credentials: LoginCredentials) => {
+    if (!apiClientRef.current) throw new Error("API client not initialized");
 
-      try {
-        setAuthState((prev) => ({ ...prev, isLoading: true }));
-        const response = await apiClientRef.current.login(credentials);
+    setAuthState((prev) => ({ ...prev, isLoading: true }));
+    try {
+      const response = await apiClientRef.current.login(credentials);
+      setAuthState({
+        user: response.user,
+        isAuthenticated: true,
+        isLoading: false,
+      });
+      return response;
+    } finally {
+      setAuthState((prev) => ({ ...prev, isLoading: false }));
+    }
+  }, []);
 
-        setAuthState({
-          user: response.user as AuthUser<T>,
-          isAuthenticated: true,
-          isLoading: false,
-        });
+  const register = useCallback(async (credentials: RegisterCredentials) => {
+    if (!apiClientRef.current) throw new Error("API client not initialized");
 
-        return response;
-      } catch (error) {
-        setAuthState((prev) => ({ ...prev, isLoading: false }));
-        throw error;
-      }
-    },
-    [],
-  );
-
-  const register = useCallback(
-    async (credentials: RegisterCredentials<T>): Promise<AuthResponse<T>> => {
-      if (!apiClientRef.current) {
-        throw new Error("API client not initialized");
-      }
-
-      try {
-        setAuthState((prev) => ({ ...prev, isLoading: true }));
-        const response = await apiClientRef.current.register(credentials);
-
-        setAuthState({
-          user: response.user as AuthUser<T>,
-          isAuthenticated: true,
-          isLoading: false,
-        });
-
-        return response;
-      } catch (error) {
-        setAuthState((prev) => ({ ...prev, isLoading: false }));
-        throw error;
-      }
-    },
-    [],
-  );
+    setAuthState((prev) => ({ ...prev, isLoading: true }));
+    try {
+      const response = await apiClientRef.current.register(credentials);
+      setAuthState({
+        user: response.user,
+        isAuthenticated: true,
+        isLoading: false,
+      });
+      return response;
+    } finally {
+      setAuthState((prev) => ({ ...prev, isLoading: false }));
+    }
+  }, []);
 
   const logout = useCallback(async () => {
-    if (!apiClientRef.current) {
-      throw new Error("API client not initialized");
-    }
+    if (!apiClientRef.current) throw new Error("API client not initialized");
 
     try {
       await apiClientRef.current.logout();
     } finally {
-      setAuthState({
-        user: null,
-        isAuthenticated: false,
-        isLoading: false,
-      });
+      setAuthState({ user: null, isAuthenticated: false, isLoading: false });
     }
   }, []);
 
@@ -167,16 +147,10 @@ export function AuthProvider<T = Record<string, unknown>>({
     await fetchUser();
   }, [fetchUser]);
 
-  const value: AuthContextValue<T> = {
-    ...authState,
-    login,
-    register,
-    logout,
-    refetchUser,
-  };
-
   return (
-    <AuthContext.Provider value={value as AuthContextValue}>
+    <AuthContext.Provider
+      value={{ ...authState, login, register, logout, refetchUser }}
+    >
       {children}
     </AuthContext.Provider>
   );

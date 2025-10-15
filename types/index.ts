@@ -1,10 +1,28 @@
-export interface AuthUser<T = Record<string, unknown>> {
+import type { AxiosInstance } from "axios";
+
+/**
+ * Default user type
+ */
+export interface User {
   id: string;
   email: string;
-  metadata?: T;
 }
 
-export interface RakitConfig {
+/**
+ * Middleware context passed to all middleware callbacks
+ */
+export interface MiddlewareContext<TUser = User> {
+  api: AxiosInstance; // Axios instance for additional API calls
+  getToken: () => string | null; // Get current access token
+  setToken: (token: string) => void; // Set new access token
+  removeToken: () => void; // Clear token
+  user?: TUser | null; // Optional user object
+}
+
+/**
+ * Configuration for the API client
+ */
+export interface RakitConfig<TUser = User> {
   endpoints: {
     login: string;
     register: string;
@@ -15,34 +33,60 @@ export interface RakitConfig {
   tokenKey?: string;
   refreshTokenKey?: string;
   baseURL?: string;
+  middleware?: {
+    onLogin?: (
+      data: AuthResponse<TUser>,
+      ctx: MiddlewareContext<TUser>,
+    ) => void | Promise<void>;
+    onRegister?: (
+      data: AuthResponse<TUser>,
+      ctx: MiddlewareContext<TUser>,
+    ) => void | Promise<void>;
+    onLogout?: (ctx: MiddlewareContext<TUser>) => void | Promise<void>;
+    onRefresh?: (
+      data: RefreshResponse,
+      ctx: MiddlewareContext<TUser>,
+    ) => void | Promise<void>;
+    onMe?: (
+      data: MeResponse<TUser>,
+      ctx: MiddlewareContext<TUser>,
+    ) => void | Promise<void>;
+  };
 }
 
-export interface AuthState<T = Record<string, unknown>> {
-  user: AuthUser<T> | null;
+/**
+ * Auth state representation
+ */
+export interface AuthState<TUser = User> {
+  user: TUser | null;
   isAuthenticated: boolean;
   isLoading: boolean;
 }
 
-export interface LoginCredentials {
-  email: string;
-  password: string;
-}
+/**
+ * Credentials for login and register
+ */
+export type LoginCredentials = Record<string, unknown>;
+export type RegisterCredentials = Record<string, unknown>;
 
-export interface RegisterCredentials<T = Record<string, unknown>> {
-  email: string;
-  password: string;
-  metadata?: T;
-}
+/**
+ * Standard response types
+ */
+export type AuthResponse<TUser = User> = {
+  user: TUser;
+} & Record<string, unknown>;
 
-export interface AuthResponse<T = Record<string, unknown>> {
-  user: AuthUser<T>;
-  accessToken?: string;
-}
+export type RefreshResponse = Record<string, unknown>;
 
-export interface RefreshResponse {
-  accessToken?: string;
-}
+export type MeResponse<TUser = User> = {
+  user: TUser;
+} & Record<string, unknown>;
 
-export interface MeResponse<T = Record<string, unknown>> {
-  user: AuthUser<T>;
+/**
+ * Standard API error type
+ */
+export interface ApiError {
+  message: string;
+  status?: number;
+  data?: unknown;
 }

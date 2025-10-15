@@ -5,21 +5,22 @@ import type {
   LoginCredentials,
   RegisterCredentials,
   AuthResponse,
+  User,
 } from "../types";
 
-interface AuthContextValue<T = Record<string, unknown>> extends AuthState<T> {
-  login: (credentials: LoginCredentials) => Promise<AuthResponse<T>>;
-  register: (credentials: RegisterCredentials<T>) => Promise<AuthResponse<T>>;
+export interface AuthContextValue<TUser = User> extends AuthState<TUser> {
+  login: (credentials: LoginCredentials) => Promise<AuthResponse<TUser>>;
+  register: (credentials: RegisterCredentials) => Promise<AuthResponse<TUser>>;
   logout: () => Promise<void>;
   refetchUser: () => Promise<void>;
 }
 
-export function useAuth<T = Record<string, unknown>>(): AuthContextValue<T> {
+export function useAuth<TUser = User>(): AuthContextValue<TUser> {
   const context = useContext(AuthContext);
 
   if (!context) {
     throw new Error("useAuth must be used within an AuthProvider");
   }
 
-  return context as AuthContextValue<T>;
+  return context as AuthContextValue<TUser>;
 }

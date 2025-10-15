@@ -10,23 +10,16 @@ import type {
   AuthResponse,
   RefreshResponse,
   MeResponse,
+  User,
+  MiddlewareContext,
+  RakitConfig,
 } from "../types";
 
-interface ApiClientConfig {
-  baseURL?: string;
-  tokenKey?: string;
-  refreshTokenKey?: string;
-  endpoints: {
-    login: string;
-    register: string;
-    logout: string;
-    refresh: string;
-    me: string;
-  };
+interface ApiClientConfig extends RakitConfig {
   onRefreshFailed?: () => void;
 }
 
-class ApiClient<T = Record<string, unknown>> {
+class ApiClient<TUser extends User = User> {
   private axiosInstance: AxiosInstance;
   private tokenManager: TokenManager;
   private config: ApiClientConfig;
@@ -45,9 +38,7 @@ class ApiClient<T = Record<string, unknown>> {
 
     this.axiosInstance = axios.create({
       baseURL: config.baseURL,
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers: { "Content-Type": "application/json" },
       withCredentials: true,
     });
 
@@ -58,9 +49,7 @@ class ApiClient<T = Record<string, unknown>> {
     this.axiosInstance.interceptors.request.use(
       (config) => {
         const token = this.tokenManager.getToken();
-        if (token) {
-          config.headers.Authorization = `Bearer ${token}`;
-        }
+        if (token) config.headers.Authorization = `Bearer ${token}`;
         return config;
       },
       (error) => Promise.reject(error),
@@ -78,12 +67,8 @@ class ApiClient<T = Record<string, unknown>> {
             return new Promise((resolve, reject) => {
               this.failedQueue.push({ resolve, reject });
             })
-              .then(() => {
-                return this.axiosInstance(originalRequest);
-              })
-              .catch((err) => {
-                return Promise.reject(err);
-              });
+              .then(() => this.axiosInstance(originalRequest))
+              .catch((err) => Promise.reject(err));
           }
 
           originalRequest._retry = true;
@@ -109,41 +94,41 @@ class ApiClient<T = Record<string, unknown>> {
   }
 
   private processQueue(error: unknown): void {
-    this.failedQueue.forEach((promise) => {
-      if (error) {
-        promise.reject(error);
-      } else {
-        promise.resolve(null);
-      }
-    });
+    this.failedQueue.forEach(({ resolve, reject }) =>
+      error ? reject(error) : resolve(null),
+    );
     this.failedQueue = [];
   }
 
-  async login(credentials: LoginCredentials): Promise<AuthResponse<T>> {
-    const response = await this.axiosInstance.post<AuthResponse<T>>(
+  private buildContext(user?: TUser): MiddlewareContext<TUser> {
+    return {
+      api: this.axiosInstance,
+      getToken: () => this.tokenManager.getToken() ?? null,
+      setToken: (token: string) => this.tokenManager.setToken(token),
+      removeToken: () => this.tokenManager.clearTokens(),
+      user,
+    };
+  }
+
+  async login(credentials: LoginCredentials): Promise<AuthResponse<TUser>> {
+    const response = await this.axiosInstance.post<AuthResponse<TUser>>(
       this.config.endpoints.login,
       credentials,
     );
-
-    if (response.data.accessToken) {
-      this.tokenManager.setToken(response.data.accessToken);
-    }
-
+    const context = this.buildContext(response.data.user);
+    await this.config.middleware?.onLogin?.(response.data, context);
     return response.data;
   }
 
   async register(
-    credentials: RegisterCredentials<T>,
-  ): Promise<AuthResponse<T>> {
-    const response = await this.axiosInstance.post<AuthResponse<T>>(
+    credentials: RegisterCredentials,
+  ): Promise<AuthResponse<TUser>> {
+    const response = await this.axiosInstance.post<AuthResponse<TUser>>(
       this.config.endpoints.register,
       credentials,
     );
-
-    if (response.data.accessToken) {
-      this.tokenManager.setToken(response.data.accessToken);
-    }
-
+    const context = this.buildContext(response.data.user);
+    await this.config.middleware?.onRegister?.(response.data, context);
     return response.data;
   }
 
@@ -151,7 +136,8 @@ class ApiClient<T = Record<string, unknown>> {
     try {
       await this.axiosInstance.post(this.config.endpoints.logout);
     } finally {
-      this.tokenManager.clearTokens();
+      const context = this.buildContext();
+      await this.config.middleware?.onLogout?.(context);
     }
   }
 
@@ -159,21 +145,25 @@ class ApiClient<T = Record<string, unknown>> {
     const response = await this.axiosInstance.post<RefreshResponse>(
       this.config.endpoints.refresh,
     );
-
-    if (response.data.accessToken) {
-      this.tokenManager.setToken(response.data.accessToken);
-    }
+    const context = this.buildContext();
+    await this.config.middleware?.onRefresh?.(response.data, context);
   }
 
-  async getCurrentUser(): Promise<MeResponse<T>> {
-    const response = await this.axiosInstance.get<MeResponse<T>>(
+  async getCurrentUser(): Promise<MeResponse<TUser>> {
+    const response = await this.axiosInstance.get<MeResponse<TUser>>(
       this.config.endpoints.me,
     );
+    const context = this.buildContext(response.data.user);
+    await this.config.middleware?.onMe?.(response.data, context);
     return response.data;
   }
 
   getTokenManager(): TokenManager {
     return this.tokenManager;
+  }
+
+  getAxiosInstance(): AxiosInstance {
+    return this.axiosInstance;
   }
 }
 
