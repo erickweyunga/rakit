@@ -6,16 +6,24 @@ import {
   Route,
   Navigate,
 } from "react-router-dom";
-import { User, Rakit, useAuth } from "rakit";
+import { User, Session, Rakit, useAuth } from "rakit";
 
+// --- Extend User type ---
 interface MyUser extends User {
   name: string;
   role: string;
 }
 
+// --- Extend Session type for tokens or extra info ---
+interface MySession extends Session {
+  access_token: string;
+  refresh_token: string;
+}
+
+// --- App Component ---
 export function App() {
   return (
-    <Rakit.Provider<MyUser>
+    <Rakit.Provider<MyUser, MySession>
       config={{
         endpoints: {
           login: "/api/auth/login",
@@ -29,22 +37,21 @@ export function App() {
         refreshTokenKey: "refresh_token",
         middleware: {
           onLogin: (data, ctx) => {
-            const user = data.user;
-            if (!user) return;
-            console.log("User logged in:", user);
-            ctx.setToken(user.name + "-token");
+            console.log("User logged in:", data.user);
+            ctx.setToken(data.session.access_token);
+            localStorage.setItem("refresh_token", data.session.refresh_token);
           },
           onLogout: (ctx) => {
             console.log("User logged out");
             ctx.removeToken();
+            localStorage.removeItem("refresh_token");
           },
-          onRefresh: (data, ctx) => {
-            console.log("Token refreshed", data);
+          onRefresh: (session, ctx) => {
+            console.log("Token refreshed:", session);
+            if (session.access_token) ctx.setToken(session.access_token);
           },
-          onMe: (data, ctx) => {
-            const user = data.user;
-            if (!user) return;
-            console.log("Current user fetched:", user);
+          onMe: (data) => {
+            console.log("Current user fetched:", data.user);
           },
         },
       }}
@@ -69,14 +76,14 @@ function AppRoutes() {
           </Rakit.Protected>
         }
       />
-      <Route path="*" element={<Navigate to="/dashboard" />} />
+      <Route path="*" element={<Navigate to="/dashboard" replace />} />
     </Routes>
   );
 }
 
 // --- Login Page ---
 function LoginPage() {
-  const { login, isLoading } = useAuth<MyUser>();
+  const { login, isLoading } = useAuth<MyUser, MySession>();
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -85,7 +92,9 @@ function LoginPage() {
     const password = form.get("password") as string;
 
     try {
-      await login({ email, password });
+      const response = await login({ email, password });
+      console.log("Access token:", response.session.access_token);
+      console.log("Refresh token:", response.session.refresh_token);
     } catch (err) {
       console.error("Login failed:", err);
     }
@@ -113,7 +122,7 @@ function LoginPage() {
 
 // --- Dashboard ---
 function Dashboard() {
-  const { user, logout, refetchUser } = useAuth<MyUser>();
+  const { user, session, logout, refetchUser } = useAuth<MyUser, MySession>();
 
   return (
     <div style={{ maxWidth: 600, margin: "auto", padding: 40 }}>
@@ -122,6 +131,7 @@ function Dashboard() {
         Welcome back, {user?.name} ({user?.role})
       </p>
       <p>Email: {user?.email}</p>
+      <p>Access Token: {session?.access_token}</p>
       <button onClick={logout} style={{ marginTop: 10 }}>
         Logout
       </button>

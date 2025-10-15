@@ -1,28 +1,26 @@
 import type { AxiosInstance } from "axios";
 
-/**
- * Default user type
- */
+/** Default user type */
 export interface User {
   id: string;
   email: string;
 }
 
-/**
- * Middleware context passed to all middleware callbacks
- */
-export interface MiddlewareContext<TUser = User> {
-  api: AxiosInstance; // Axios instance for additional API calls
-  getToken: () => string | null; // Get current access token
-  setToken: (token: string) => void; // Set new access token
-  removeToken: () => void; // Clear token
-  user?: TUser | null; // Optional user object
+/** Session type (any extra info like tokens, roles, etc.) */
+export type Session = Record<string, unknown>;
+
+/** Middleware context passed to callbacks */
+export interface MiddlewareContext<TUser = User, TSession = Session> {
+  api: AxiosInstance;
+  getToken: () => string | null;
+  setToken: (token: string) => void;
+  removeToken: () => void;
+  user?: TUser | null;
+  session?: TSession | null;
 }
 
-/**
- * Configuration for the API client
- */
-export interface RakitConfig<TUser = User> {
+/** API client config */
+export interface RakitConfig<TUser = User, TSession = Session> {
   endpoints: {
     login: string;
     register: string;
@@ -34,57 +32,75 @@ export interface RakitConfig<TUser = User> {
   refreshTokenKey?: string;
   baseURL?: string;
   middleware?: {
-    onLogin?: (
-      data: AuthResponse<TUser>,
-      ctx: MiddlewareContext<TUser>,
+    onLogin?: <
+      TResponse extends AuthResponse<
+        TUser,
+        TSession,
+        Record<string, unknown>
+      > = AuthResponse<TUser, TSession, Record<string, unknown>>,
+    >(
+      data: TResponse,
+      ctx: MiddlewareContext<TUser, TSession>,
     ) => void | Promise<void>;
-    onRegister?: (
-      data: AuthResponse<TUser>,
-      ctx: MiddlewareContext<TUser>,
+
+    onRegister?: <
+      TResponse extends AuthResponse<
+        TUser,
+        TSession,
+        Record<string, unknown>
+      > = AuthResponse<TUser, TSession, Record<string, unknown>>,
+    >(
+      data: TResponse,
+      ctx: MiddlewareContext<TUser, TSession>,
     ) => void | Promise<void>;
-    onLogout?: (ctx: MiddlewareContext<TUser>) => void | Promise<void>;
+
+    onLogout?: (
+      ctx: MiddlewareContext<TUser, TSession>,
+    ) => void | Promise<void>;
     onRefresh?: (
-      data: RefreshResponse,
-      ctx: MiddlewareContext<TUser>,
+      data: TSession & Record<string, unknown>,
+      ctx: MiddlewareContext<TUser, TSession>,
     ) => void | Promise<void>;
-    onMe?: (
-      data: MeResponse<TUser>,
-      ctx: MiddlewareContext<TUser>,
+    onMe?: <
+      TResponse extends MeResponse<
+        TUser,
+        TSession,
+        Record<string, unknown>
+      > = MeResponse<TUser, TSession, Record<string, unknown>>,
+    >(
+      data: TResponse,
+      ctx: MiddlewareContext<TUser, TSession>,
     ) => void | Promise<void>;
   };
 }
 
-/**
- * Auth state representation
- */
-export interface AuthState<TUser = User> {
+/** Auth state */
+export interface AuthState<TUser = User, TSession = Session> {
   user: TUser | null;
+  session: TSession | null;
   isAuthenticated: boolean;
   isLoading: boolean;
 }
 
-/**
- * Credentials for login and register
- */
+/** Login/Register credentials */
 export type LoginCredentials = Record<string, unknown>;
 export type RegisterCredentials = Record<string, unknown>;
 
-/**
- * Standard response types
- */
-export type AuthResponse<TUser = User> = {
-  user: TUser;
-} & Record<string, unknown>;
+/** Dynamic auth response */
+export type AuthResponse<
+  TUser = User,
+  TSession = Session,
+  TData extends Record<string, unknown> = Record<string, unknown>,
+> = { user: TUser; session: TSession } & TData;
 
-export type RefreshResponse = Record<string, unknown>;
+/** Me response */
+export type MeResponse<
+  TUser = User,
+  TSession = Session,
+  TData extends Record<string, unknown> = Record<string, unknown>,
+> = { user: TUser; session: TSession } & TData;
 
-export type MeResponse<TUser = User> = {
-  user: TUser;
-} & Record<string, unknown>;
-
-/**
- * Standard API error type
- */
+/** Standard API error */
 export interface ApiError {
   message: string;
   status?: number;

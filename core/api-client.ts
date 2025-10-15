@@ -8,28 +8,32 @@ import type {
   LoginCredentials,
   RegisterCredentials,
   AuthResponse,
-  RefreshResponse,
   MeResponse,
   User,
+  Session,
   MiddlewareContext,
   RakitConfig,
 } from "../types";
 
-interface ApiClientConfig extends RakitConfig {
+interface ApiClientConfig<TUser = User, TSession = Session>
+  extends RakitConfig<TUser, TSession> {
   onRefreshFailed?: () => void;
 }
 
-class ApiClient<TUser extends User = User> {
+export default class ApiClient<
+  TUser extends User = User,
+  TSession extends Session = Session,
+> {
   private axiosInstance: AxiosInstance;
   private tokenManager: TokenManager;
-  private config: ApiClientConfig;
+  private config: ApiClientConfig<TUser, TSession>;
   private isRefreshing = false;
   private failedQueue: Array<{
     resolve: (value: unknown) => void;
     reject: (reason: unknown) => void;
   }> = [];
 
-  constructor(config: ApiClientConfig) {
+  constructor(config: ApiClientConfig<TUser, TSession>) {
     this.config = config;
     this.tokenManager = new TokenManager(
       config.tokenKey,
@@ -46,14 +50,11 @@ class ApiClient<TUser extends User = User> {
   }
 
   private setupInterceptors(): void {
-    this.axiosInstance.interceptors.request.use(
-      (config) => {
-        const token = this.tokenManager.getToken();
-        if (token) config.headers.Authorization = `Bearer ${token}`;
-        return config;
-      },
-      (error) => Promise.reject(error),
-    );
+    this.axiosInstance.interceptors.request.use((config) => {
+      const token = this.tokenManager.getToken();
+      if (token) config.headers.Authorization = `Bearer ${token}`;
+      return config;
+    });
 
     this.axiosInstance.interceptors.response.use(
       (response) => response,
@@ -61,12 +62,11 @@ class ApiClient<TUser extends User = User> {
         const originalRequest = error.config as AxiosRequestConfig & {
           _retry?: boolean;
         };
-
         if (error.response?.status === 401 && !originalRequest._retry) {
           if (this.isRefreshing) {
-            return new Promise((resolve, reject) => {
-              this.failedQueue.push({ resolve, reject });
-            })
+            return new Promise((resolve, reject) =>
+              this.failedQueue.push({ resolve, reject }),
+            )
               .then(() => this.axiosInstance(originalRequest))
               .catch((err) => Promise.reject(err));
           }
@@ -87,84 +87,97 @@ class ApiClient<TUser extends User = User> {
             this.isRefreshing = false;
           }
         }
-
         return Promise.reject(error);
       },
     );
   }
 
-  private processQueue(error: unknown): void {
+  private processQueue(error: unknown) {
     this.failedQueue.forEach(({ resolve, reject }) =>
       error ? reject(error) : resolve(null),
     );
     this.failedQueue = [];
   }
 
-  private buildContext(user?: TUser): MiddlewareContext<TUser> {
+  private buildContext(
+    user?: TUser,
+    session?: TSession,
+  ): MiddlewareContext<TUser, TSession> {
     return {
       api: this.axiosInstance,
       getToken: () => this.tokenManager.getToken() ?? null,
       setToken: (token: string) => this.tokenManager.setToken(token),
       removeToken: () => this.tokenManager.clearTokens(),
       user,
+      session,
     };
   }
 
-  async login(credentials: LoginCredentials): Promise<AuthResponse<TUser>> {
-    const response = await this.axiosInstance.post<AuthResponse<TUser>>(
+  async login<
+    TResponse extends AuthResponse<TUser, TSession> = AuthResponse<
+      TUser,
+      TSession
+    >,
+  >(credentials: LoginCredentials): Promise<TResponse> {
+    const res = await this.axiosInstance.post<TResponse>(
       this.config.endpoints.login,
       credentials,
     );
-    const context = this.buildContext(response.data.user);
-    await this.config.middleware?.onLogin?.(response.data, context);
-    return response.data;
+    const ctx = this.buildContext(res.data.user, res.data.session);
+    await this.config.middleware?.onLogin?.(res.data, ctx);
+    return res.data;
   }
 
-  async register(
-    credentials: RegisterCredentials,
-  ): Promise<AuthResponse<TUser>> {
-    const response = await this.axiosInstance.post<AuthResponse<TUser>>(
+  async register<
+    TResponse extends AuthResponse<TUser, TSession> = AuthResponse<
+      TUser,
+      TSession
+    >,
+  >(credentials: RegisterCredentials): Promise<TResponse> {
+    const res = await this.axiosInstance.post<TResponse>(
       this.config.endpoints.register,
       credentials,
     );
-    const context = this.buildContext(response.data.user);
-    await this.config.middleware?.onRegister?.(response.data, context);
-    return response.data;
+    const ctx = this.buildContext(res.data.user, res.data.session);
+    await this.config.middleware?.onRegister?.(res.data, ctx);
+    return res.data;
   }
 
   async logout(): Promise<void> {
     try {
       await this.axiosInstance.post(this.config.endpoints.logout);
     } finally {
-      const context = this.buildContext();
-      await this.config.middleware?.onLogout?.(context);
+      const ctx = this.buildContext();
+      await this.config.middleware?.onLogout?.(ctx);
     }
   }
 
-  async refreshToken(): Promise<void> {
-    const response = await this.axiosInstance.post<RefreshResponse>(
+  async refreshToken(): Promise<TSession> {
+    const res = await this.axiosInstance.post<TSession>(
       this.config.endpoints.refresh,
     );
-    const context = this.buildContext();
-    await this.config.middleware?.onRefresh?.(response.data, context);
+    const session = res.data;
+    const ctx = this.buildContext(undefined, session);
+    await this.config.middleware?.onRefresh?.(session, ctx);
+    return session;
   }
 
-  async getCurrentUser(): Promise<MeResponse<TUser>> {
-    const response = await this.axiosInstance.get<MeResponse<TUser>>(
+  async getCurrentUser<
+    TResponse extends MeResponse<TUser, TSession> = MeResponse<TUser, TSession>,
+  >(): Promise<TResponse> {
+    const res = await this.axiosInstance.get<TResponse>(
       this.config.endpoints.me,
     );
-    const context = this.buildContext(response.data.user);
-    await this.config.middleware?.onMe?.(response.data, context);
-    return response.data;
+    const ctx = this.buildContext(res.data.user, res.data.session);
+    await this.config.middleware?.onMe?.(res.data, ctx);
+    return res.data;
   }
 
-  getTokenManager(): TokenManager {
+  getTokenManager() {
     return this.tokenManager;
   }
 
-  getAxiosInstance(): AxiosInstance {
+  getAxiosInstance() {
     return this.axiosInstance;
   }
 }
-
-export default ApiClient;
