@@ -1,6 +1,6 @@
 {
   "name": "rakit",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "React authentication library with JWT, cookies, refresh tokens, protected routes, and hooks for backend integration.",
   "keywords": [
     "react",
@@ -23,7 +23,7 @@
     "dist"
   ],
   "scripts": {
-    "build:js": "bun build index.ts --outdir dist",
+    "build:js": "bun build index.ts --outdir dist --external react --external react-dom --external react-router-dom",
     "build": "bun run build:js && bun run types",
     "types": "bun tsc",
     "prepare": "bun run build",
@@ -37,7 +37,6 @@
   },
   "dependencies": {
     "@types/js-cookie": "^3.0.6",
-    "@types/react-dom": "^19.2.2",
     "axios": "^1.12.2",
     "js-cookie": "^3.0.5",
     "jwt-decode": "^4.0.0"
@@ -48,6 +47,7 @@
     }
   },
   "devDependencies": {
+    "@types/react-dom": "^19.2.2",
     "@types/bun": "latest"
   },
   "repository": {
