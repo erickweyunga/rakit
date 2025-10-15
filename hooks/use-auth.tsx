@@ -4,11 +4,12 @@ import type {
   AuthState,
   LoginCredentials,
   RegisterCredentials,
+  AuthResponse,
 } from "../types";
 
 interface AuthContextValue<T = Record<string, unknown>> extends AuthState<T> {
-  login: (credentials: LoginCredentials) => Promise<void>;
-  register: (credentials: RegisterCredentials<T>) => Promise<void>;
+  login: (credentials: LoginCredentials) => Promise<AuthResponse<T>>;
+  register: (credentials: RegisterCredentials<T>) => Promise<AuthResponse<T>>;
   logout: () => Promise<void>;
   refetchUser: () => Promise<void>;
 }
