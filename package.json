@@ -1,6 +1,6 @@
 {
   "name": "rakit",
-  "version": "0.0.11",
+  "version": "0.0.12",
   "description": "React authentication library with JWT, cookies, refresh tokens, protected routes, and hooks for backend integration.",
   "keywords": [
     "react",

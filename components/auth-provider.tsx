@@ -7,7 +7,6 @@ import React, {
 } from "react";
 import ApiClient from "../core/api-client";
 import type { RakitConfig, AuthState, Credentials } from "../types";
-import TokenManager from "../core/token-manager";
 
 export interface AuthContextValue<
   TResponse extends Record<string, any> = Record<string, any>,
@@ -15,7 +14,6 @@ export interface AuthContextValue<
   login: (credentials: Credentials) => Promise<TResponse>;
   register: (credentials: Credentials) => Promise<TResponse>;
   logout: () => Promise<void>;
-  refetch: () => Promise<void>;
 }
 
 export const AuthContext = createContext<AuthContextValue | null>(null);
@@ -30,110 +28,179 @@ interface AuthProviderProps<
 export function AuthProvider<
   TResponse extends Record<string, any> = Record<string, any>,
 >({ config, children }: AuthProviderProps<TResponse>): React.ReactElement {
-  const [state, setState] = useState<AuthState<TResponse>>(() => {
-    const tokenManager = new TokenManager(
-      config.tokenKey,
-      config.refreshTokenKey,
-    );
-
-    const hasValidToken = tokenManager.isAuthenticated();
-    const hasRefreshToken = !!tokenManager.getRefreshToken();
-
-    const isAuthenticated = hasValidToken || hasRefreshToken;
-
-    return {
-      data: null,
-      isAuthenticated,
-      isLoading: true,
-    } as AuthState<TResponse>;
-  });
+  const [state, setState] = useState<AuthState<TResponse>>({
+    data: null,
+    isAuthenticated: false,
+    isLoading: true,
+  } as AuthState<TResponse>);
 
   const apiClientRef = useRef<ApiClient<TResponse> | null>(null);
+  const mountedRef = useRef(true);
 
   useEffect(() => {
-    apiClientRef.current = new ApiClient<TResponse>({
-      ...config,
-      onRefreshFailed: () =>
+    mountedRef.current = true;
+
+    const initAuth = async () => {
+      try {
+        const apiClient = new ApiClient<TResponse>({
+          ...config,
+          onRefreshFailed: () => {
+            if (mountedRef.current) {
+              setState({
+                data: null,
+                isAuthenticated: false,
+                isLoading: false,
+              });
+            }
+          },
+        });
+
+        apiClientRef.current = apiClient;
+
+        const tokenManager = apiClient.getTokenManager();
+        const hasValidToken = tokenManager.isAuthenticated();
+        const hasRefreshToken = !!tokenManager.getRefreshToken();
+
+        if (!hasValidToken && !hasRefreshToken) {
+          if (mountedRef.current) {
+            setState({
+              data: null,
+              isAuthenticated: false,
+              isLoading: false,
+            });
+          }
+          return;
+        }
+
+        if (mountedRef.current) {
+          setState((prev) => ({ ...prev, isLoading: true }));
+        }
+
+        const userData = await apiClient.me();
+
+        if (mountedRef.current) {
+          setState({
+            data: userData,
+            isAuthenticated: true,
+            isLoading: false,
+          });
+        }
+      } catch (error) {
+        console.error("Auth initialization failed:", error);
+        if (mountedRef.current) {
+          setState({
+            data: null,
+            isAuthenticated: false,
+            isLoading: false,
+          });
+        }
+      }
+    };
+
+    initAuth();
+
+    return () => {
+      mountedRef.current = false;
+    };
+  }, [config]);
+
+  const executeAuthAction = useCallback(
+    async <T,>(
+      action: () => Promise<T>,
+      successCallback?: (data: T) => void,
+    ): Promise<T> => {
+      if (!apiClientRef.current) {
+        throw new Error("ApiClient not initialized");
+      }
+
+      if (mountedRef.current) {
+        setState((prev) => ({ ...prev, isLoading: true }));
+      }
+
+      try {
+        const result = await action();
+
+        if (mountedRef.current) {
+          successCallback?.(result);
+        }
+
+        return result;
+      } catch (error) {
+        if (mountedRef.current) {
+          setState((prev) => ({
+            ...prev,
+            data: null,
+            isAuthenticated: false,
+            isLoading: false,
+          }));
+        }
+        throw error;
+      }
+    },
+    [],
+  );
+
+  const login = useCallback(
+    async (credentials: Credentials) => {
+      return executeAuthAction(
+        async () => {
+          const data = await apiClientRef.current!.login(credentials);
+          return data;
+        },
+        (data) => {
+          setState({
+            data,
+            isAuthenticated: true,
+            isLoading: false,
+          });
+        },
+      );
+    },
+    [executeAuthAction],
+  );
+
+  const register = useCallback(
+    async (credentials: Credentials) => {
+      return executeAuthAction(
+        async () => {
+          const data = await apiClientRef.current!.register(credentials);
+          return data;
+        },
+        (data) => {
+          setState({
+            data,
+            isAuthenticated: true,
+            isLoading: false,
+          });
+        },
+      );
+    },
+    [executeAuthAction],
+  );
+
+  const logout = useCallback(async () => {
+    return executeAuthAction(
+      async () => {
+        await apiClientRef.current!.logout();
+      },
+      () => {
         setState({
           data: null,
           isAuthenticated: false,
           isLoading: false,
-        } as AuthState<TResponse>),
-    });
-  }, [config]);
-
-  const fetch = useCallback(async () => {
-    if (!apiClientRef.current) return;
-
-    setState((prev) => ({ ...prev, isLoading: true }));
-    try {
-      const data = await apiClientRef.current.me();
-      setState({ data, isAuthenticated: true, isLoading: false });
-    } catch {
-      setState((prev) => ({
-        ...prev,
-        data: null,
-        isAuthenticated: false,
-        isLoading: false,
-      }));
-    }
-  }, []);
+        });
+      },
+    );
+  }, [executeAuthAction]);
 
   useEffect(() => {
-    fetch();
-  }, [fetch]);
-
-  const login = useCallback(async (credentials: Credentials) => {
-    if (!apiClientRef.current) throw new Error("ApiClient not initialized");
-    setState((prev) => ({ ...prev, isLoading: true }));
-    try {
-      const data = await apiClientRef.current.login(credentials);
-      setState({ data, isAuthenticated: true, isLoading: false });
-      return data;
-    } catch (error) {
-      setState((prev) => ({
-        ...prev,
-        data: null,
-        isAuthenticated: false,
-        isLoading: false,
-      }));
-      throw error;
-    }
+    return () => {
+      mountedRef.current = false;
+    };
   }, []);
-
-  const register = useCallback(async (credentials: Credentials) => {
-    if (!apiClientRef.current) throw new Error("ApiClient not initialized");
-    setState((prev) => ({ ...prev, isLoading: true }));
-    try {
-      const data = await apiClientRef.current.register(credentials);
-      setState({ data, isAuthenticated: true, isLoading: false });
-      return data;
-    } catch (error) {
-      setState((prev) => ({
-        ...prev,
-        data: null,
-        isAuthenticated: false,
-        isLoading: false,
-      }));
-      throw error;
-    }
-  }, []);
-
-  const logout = useCallback(async () => {
-    if (!apiClientRef.current) throw new Error("ApiClient not initialized");
-    try {
-      await apiClientRef.current.logout();
-    } finally {
-      setState({ data: null, isAuthenticated: false, isLoading: false });
-    }
-  }, []);
-
-  const refetch = useCallback(async () => fetch(), [fetch]);
 
   return (
-    <AuthContext.Provider
-      value={{ ...state, login, register, logout, refetch }}
-    >
+    <AuthContext.Provider value={{ ...state, login, register, logout }}>
       {children}
     </AuthContext.Provider>
   );

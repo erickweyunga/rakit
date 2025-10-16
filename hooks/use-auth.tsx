@@ -8,7 +8,6 @@ export interface AuthContextValue<
   login: (credentials: Credentials) => Promise<TResponse>;
   register: (credentials: Credentials) => Promise<TResponse>;
   logout: () => Promise<void>;
-  refetch: () => Promise<void>;
 }
 
 /**
