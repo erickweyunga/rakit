@@ -6,191 +6,103 @@ import React, {
   useRef,
 } from "react";
 import ApiClient from "../core/api-client";
-import type {
-  RakitConfig,
-  AuthState,
-  User,
-  Session,
-  LoginCredentials,
-  RegisterCredentials,
-  AuthResponse,
-  MeResponse,
-} from "../types";
+import type { RakitConfig, AuthState, Credentials } from "../types";
 
-// --- Auth Context Value ---
 export interface AuthContextValue<
-  TUser extends User = User,
-  TSession extends Session = Session,
-> extends AuthState<TUser, TSession> {
-  login: (
-    credentials: LoginCredentials,
-  ) => Promise<AuthResponse<TUser, TSession>>;
-  register: (
-    credentials: RegisterCredentials,
-  ) => Promise<AuthResponse<TUser, TSession>>;
+  TResponse extends Record<string, any> = Record<string, any>,
+> extends AuthState<TResponse> {
+  login: (credentials: Credentials) => Promise<TResponse>;
+  register: (credentials: Credentials) => Promise<TResponse>;
   logout: () => Promise<void>;
-  refetchUser: () => Promise<void>;
+  refetch: () => Promise<void>;
 }
 
-// --- Context ---
 export const AuthContext = createContext<AuthContextValue | null>(null);
 
 interface AuthProviderProps<
-  TUser extends User = User,
-  TSession extends Session = Session,
+  TResponse extends Record<string, any> = Record<string, any>,
 > {
-  config: RakitConfig<TUser, TSession>;
+  config: RakitConfig<TResponse>;
   children: React.ReactNode;
 }
 
-// --- AuthProvider Component ---
 export function AuthProvider<
-  TUser extends User = User,
-  TSession extends Session = Session,
->({
-  config,
-  children,
-}: AuthProviderProps<TUser, TSession>): React.ReactElement {
-  const [authState, setAuthState] = useState<AuthState<TUser, TSession>>({
-    user: null,
-    session: null,
+  TResponse extends Record<string, any> = Record<string, any>,
+>({ config, children }: AuthProviderProps<TResponse>): React.ReactElement {
+  const [state, setState] = useState<AuthState<TResponse>>({
+    data: null,
     isAuthenticated: false,
     isLoading: true,
-  });
+  } as AuthState<TResponse>);
 
-  const apiClientRef = useRef<ApiClient<TUser, TSession> | null>(null);
+  const apiClientRef = useRef<ApiClient<TResponse> | null>(null);
 
-  // Initialize ApiClient
   useEffect(() => {
-    apiClientRef.current = new ApiClient<TUser, TSession>({
+    apiClientRef.current = new ApiClient<TResponse>({
       ...config,
       onRefreshFailed: () =>
-        setAuthState({
-          user: null,
-          session: null,
+        setState({
+          data: null,
           isAuthenticated: false,
           isLoading: false,
-        }),
+        } as AuthState<TResponse>),
     });
   }, [config]);
 
-  // Fetch current user + session
-  const fetchUser = useCallback(async () => {
+  const fetch = useCallback(async () => {
     if (!apiClientRef.current) return;
 
-    const tokenManager = apiClientRef.current.getTokenManager();
-    const token = tokenManager.getToken();
-
-    if (!token || tokenManager.isTokenExpired(token)) {
-      setAuthState({
-        user: null,
-        session: null,
-        isAuthenticated: false,
-        isLoading: false,
-      });
-      return;
-    }
-
+    setState((prev) => ({ ...prev, isLoading: true }));
     try {
-      const response =
-        await apiClientRef.current.getCurrentUser<
-          MeResponse<TUser, TSession>
-        >();
-      setAuthState({
-        user: response.user,
-        session: response.session,
-        isAuthenticated: true,
-        isLoading: false,
-      });
+      const data = await apiClientRef.current.me();
+      setState({ data, isAuthenticated: true, isLoading: false });
     } catch {
-      setAuthState({
-        user: null,
-        session: null,
-        isAuthenticated: false,
-        isLoading: false,
-      });
+      setState({ data: null, isAuthenticated: false, isLoading: false });
     }
   }, []);
 
   useEffect(() => {
-    fetchUser();
-  }, [fetchUser]);
+    fetch();
+  }, [fetch]);
 
-  // --- Login ---
-  const login = useCallback(
-    async (
-      credentials: LoginCredentials,
-    ): Promise<AuthResponse<TUser, TSession>> => {
-      if (!apiClientRef.current) throw new Error("API client not initialized");
-
-      setAuthState((prev) => ({ ...prev, isLoading: true }));
-      try {
-        const response =
-          await apiClientRef.current.login<AuthResponse<TUser, TSession>>(
-            credentials,
-          );
-        setAuthState({
-          user: response.user,
-          session: response.session,
-          isAuthenticated: true,
-          isLoading: false,
-        });
-        return response;
-      } finally {
-        setAuthState((prev) => ({ ...prev, isLoading: false }));
-      }
-    },
-    [],
-  );
-
-  // --- Register ---
-  const register = useCallback(
-    async (
-      credentials: RegisterCredentials,
-    ): Promise<AuthResponse<TUser, TSession>> => {
-      if (!apiClientRef.current) throw new Error("API client not initialized");
-
-      setAuthState((prev) => ({ ...prev, isLoading: true }));
-      try {
-        const response =
-          await apiClientRef.current.register<AuthResponse<TUser, TSession>>(
-            credentials,
-          );
-        setAuthState({
-          user: response.user,
-          session: response.session,
-          isAuthenticated: true,
-          isLoading: false,
-        });
-        return response;
-      } finally {
-        setAuthState((prev) => ({ ...prev, isLoading: false }));
-      }
-    },
-    [],
-  );
-
-  // --- Logout ---
-  const logout = useCallback(async () => {
-    if (!apiClientRef.current) throw new Error("API client not initialized");
+  const login = useCallback(async (credentials: Credentials) => {
+    if (!apiClientRef.current) throw new Error("ApiClient not initialized");
+    setState((prev) => ({ ...prev, isLoading: true }));
     try {
-      await apiClientRef.current.logout();
+      const data = await apiClientRef.current.login(credentials);
+      setState({ data, isAuthenticated: true, isLoading: false });
+      return data;
     } finally {
-      setAuthState({
-        user: null,
-        session: null,
-        isAuthenticated: false,
-        isLoading: false,
-      });
+      setState((prev) => ({ ...prev, isLoading: false }));
     }
   }, []);
 
-  // --- Refetch user/session ---
-  const refetchUser = useCallback(async () => fetchUser(), [fetchUser]);
+  const register = useCallback(async (credentials: Credentials) => {
+    if (!apiClientRef.current) throw new Error("ApiClient not initialized");
+    setState((prev) => ({ ...prev, isLoading: true }));
+    try {
+      const data = await apiClientRef.current.register(credentials);
+      setState({ data, isAuthenticated: true, isLoading: false });
+      return data;
+    } finally {
+      setState((prev) => ({ ...prev, isLoading: false }));
+    }
+  }, []);
+
+  const logout = useCallback(async () => {
+    if (!apiClientRef.current) throw new Error("ApiClient not initialized");
+    try {
+      await apiClientRef.current.logout();
+    } finally {
+      setState({ data: null, isAuthenticated: false, isLoading: false });
+    }
+  }, []);
+
+  const refetch = useCallback(async () => fetch(), [fetch]);
 
   return (
     <AuthContext.Provider
-      value={{ ...authState, login, register, logout, refetchUser }}
+      value={{ ...state, login, register, logout, refetch }}
     >
       {children}
     </AuthContext.Provider>

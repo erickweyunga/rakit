@@ -6,7 +6,8 @@ import {
   Route,
   Navigate,
 } from "react-router-dom";
-import { User, Session, Rakit, useAuth } from "rakit";
+import { Rakit, useAuth } from "rakit";
+import type { User, Session } from "rakit";
 
 // --- Extend User type ---
 interface MyUser extends User {
@@ -23,7 +24,7 @@ interface MySession extends Session {
 // --- App Component ---
 export function App() {
   return (
-    <Rakit.Provider<MyUser, MySession>
+    <Rakit.Provider<MyUser & MySession> // using TResponse as extended type
       config={{
         endpoints: {
           login: "/api/auth/login",
@@ -35,23 +36,25 @@ export function App() {
         baseURL: "http://localhost:3000",
         tokenKey: "access_token",
         refreshTokenKey: "refresh_token",
-        middleware: {
-          onLogin: (data, ctx) => {
-            console.log("User logged in:", data.user);
-            ctx.setToken(data.session.access_token);
-            localStorage.setItem("refresh_token", data.session.refresh_token);
+        callbacks: {
+          login: (data, ctx) => {
+            console.log("User logged in:", data.email);
+            ctx.setToken(data.access_token);
+            localStorage.setItem("refresh_token", data.refresh_token);
           },
-          onLogout: (ctx) => {
+          logout: (ctx) => {
             console.log("User logged out");
             ctx.removeToken();
             localStorage.removeItem("refresh_token");
           },
-          onRefresh: (session, ctx) => {
+          refresh: (session, ctx) => {
             console.log("Token refreshed:", session);
-            if (session.access_token) ctx.setToken(session.access_token);
+            if (session.access_token) {
+              ctx.setToken(session.access_token);
+            }
           },
-          onMe: (data) => {
-            console.log("Current user fetched:", data.user);
+          me: (data) => {
+            console.log("Current user fetched:", data.email);
           },
         },
       }}
@@ -83,7 +86,7 @@ function AppRoutes() {
 
 // --- Login Page ---
 function LoginPage() {
-  const { login, isLoading } = useAuth<MyUser, MySession>();
+  const { login, isLoading } = useAuth<MyUser & MySession>();
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -93,8 +96,8 @@ function LoginPage() {
 
     try {
       const response = await login({ email, password });
-      console.log("Access token:", response.session.access_token);
-      console.log("Refresh token:", response.session.refresh_token);
+      console.log("Access token:", response.access_token);
+      console.log("Refresh token:", response.refresh_token);
     } catch (err) {
       console.error("Login failed:", err);
     }
@@ -122,7 +125,10 @@ function LoginPage() {
 
 // --- Dashboard ---
 function Dashboard() {
-  const { user, session, logout, refetchUser } = useAuth<MyUser, MySession>();
+  const { data, logout, refetch } = useAuth<MyUser & MySession>();
+
+  const user = data?.user as MyUser;
+  const session = data;
 
   return (
     <div style={{ maxWidth: 600, margin: "auto", padding: 40 }}>
@@ -135,7 +141,7 @@ function Dashboard() {
       <button onClick={logout} style={{ marginTop: 10 }}>
         Logout
       </button>
-      <button onClick={refetchUser} style={{ marginTop: 10, marginLeft: 10 }}>
+      <button onClick={refetch} style={{ marginTop: 10, marginLeft: 10 }}>
         Refresh User
       </button>
     </div>

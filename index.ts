@@ -4,17 +4,14 @@ import { Protected } from "./components/protected";
 import { Outlet } from "./components/outlet";
 import { useAuth } from "./hooks/use-auth";
 
-import type { User, Session } from "./types";
-
 /**
  * Rakit main export — lightweight authentication toolkit
  */
 export const Rakit = {
   Provider: AuthProvider as <
-    TUser extends User = User,
-    TSession extends Session = Session,
+    TResponse extends Record<string, any> = Record<string, any>,
   >(
-    props: React.ComponentProps<typeof AuthProvider<TUser, TSession>>,
+    props: React.ComponentProps<typeof AuthProvider<TResponse>>,
   ) => React.ReactElement,
   Protected,
   Outlet,
@@ -34,13 +31,10 @@ export { useAuth } from "./hooks/use-auth";
  * ---------------------------- */
 export type {
   RakitConfig,
+  AuthState,
+  Credentials,
   User,
   Session,
-  AuthState,
-  LoginCredentials,
-  RegisterCredentials,
-  AuthResponse,
-  MeResponse,
   ApiError,
   MiddlewareContext,
 } from "./types";

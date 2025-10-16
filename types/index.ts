@@ -6,21 +6,21 @@ export interface User {
   email: string;
 }
 
-/** Session type (any extra info like tokens, roles, etc.) */
+/** Generic session data (tokens, roles, etc.) */
 export type Session = Record<string, unknown>;
 
-/** Middleware context passed to callbacks */
-export interface MiddlewareContext<TUser = User, TSession = Session> {
+/** Context passed to callbacks */
+export interface MiddlewareContext {
   api: AxiosInstance;
   getToken: () => string | null;
   setToken: (token: string) => void;
   removeToken: () => void;
-  user?: TUser | null;
-  session?: TSession | null;
 }
 
-/** API client config */
-export interface RakitConfig<TUser = User, TSession = Session> {
+/** API client configuration */
+export interface RakitConfig<
+  TResponse extends Record<string, any> = Record<string, any>,
+> {
   endpoints: {
     login: string;
     register: string;
@@ -31,74 +31,40 @@ export interface RakitConfig<TUser = User, TSession = Session> {
   tokenKey?: string;
   refreshTokenKey?: string;
   baseURL?: string;
-  middleware?: {
-    onLogin?: <
-      TResponse extends AuthResponse<
-        TUser,
-        TSession,
-        Record<string, unknown>
-      > = AuthResponse<TUser, TSession, Record<string, unknown>>,
-    >(
+
+  /** Callback hooks for auth lifecycle */
+  callbacks?: {
+    /** Called after successful login */
+    login?: (data: TResponse, ctx: MiddlewareContext) => void | Promise<void>;
+
+    /** Called after successful registration */
+    register?: (
       data: TResponse,
-      ctx: MiddlewareContext<TUser, TSession>,
+      ctx: MiddlewareContext,
     ) => void | Promise<void>;
 
-    onRegister?: <
-      TResponse extends AuthResponse<
-        TUser,
-        TSession,
-        Record<string, unknown>
-      > = AuthResponse<TUser, TSession, Record<string, unknown>>,
-    >(
-      data: TResponse,
-      ctx: MiddlewareContext<TUser, TSession>,
-    ) => void | Promise<void>;
+    /** Called on logout */
+    logout?: (ctx: MiddlewareContext) => void | Promise<void>;
 
-    onLogout?: (
-      ctx: MiddlewareContext<TUser, TSession>,
-    ) => void | Promise<void>;
-    onRefresh?: (
-      data: TSession & Record<string, unknown>,
-      ctx: MiddlewareContext<TUser, TSession>,
-    ) => void | Promise<void>;
-    onMe?: <
-      TResponse extends MeResponse<
-        TUser,
-        TSession,
-        Record<string, unknown>
-      > = MeResponse<TUser, TSession, Record<string, unknown>>,
-    >(
-      data: TResponse,
-      ctx: MiddlewareContext<TUser, TSession>,
-    ) => void | Promise<void>;
+    /** Called when token is refreshed */
+    refresh?: (data: TResponse, ctx: MiddlewareContext) => void | Promise<void>;
+
+    /** Called after fetching /me */
+    me?: (data: TResponse, ctx: MiddlewareContext) => void | Promise<void>;
   };
 }
 
-/** Auth state */
-export interface AuthState<TUser = User, TSession = Session> {
-  user: TUser | null;
-  session: TSession | null;
+/** Authentication state */
+export interface AuthState<
+  TResponse extends Record<string, any> = Record<string, any>,
+> {
+  data: TResponse | null;
   isAuthenticated: boolean;
   isLoading: boolean;
 }
 
-/** Login/Register credentials */
-export type LoginCredentials = Record<string, unknown>;
-export type RegisterCredentials = Record<string, unknown>;
-
-/** Dynamic auth response */
-export type AuthResponse<
-  TUser = User,
-  TSession = Session,
-  TData extends Record<string, unknown> = Record<string, unknown>,
-> = { user: TUser; session: TSession } & TData;
-
-/** Me response */
-export type MeResponse<
-  TUser = User,
-  TSession = Session,
-  TData extends Record<string, unknown> = Record<string, unknown>,
-> = { user: TUser; session: TSession } & TData;
+/** Credentials for login/register */
+export type Credentials = Record<string, unknown>;
 
 /** Standard API error */
 export interface ApiError {
