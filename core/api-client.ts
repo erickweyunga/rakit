@@ -94,9 +94,25 @@ export default class ApiClient<TResponse extends Record<string, any> = any> {
   private buildContext(): MiddlewareContext {
     return {
       api: this.axiosInstance,
+      // Access token methods
       getToken: () => this.tokenManager.getToken() ?? null,
       setToken: (token: string) => this.tokenManager.setToken(token),
-      removeToken: () => this.tokenManager.clearTokens(),
+      removeToken: () => this.tokenManager.removeToken(),
+
+      // Refresh token methods
+      getRefreshToken: () => this.tokenManager.getRefreshToken() ?? null,
+      setRefreshToken: (token: string) =>
+        this.tokenManager.setRefreshToken(token),
+      removeRefreshToken: () => this.tokenManager.removeRefreshToken(),
+
+      // Combined token methods
+      clearTokens: () => this.tokenManager.clearTokens(),
+
+      // Auth actions
+      login: this.login.bind(this),
+      logout: this.logout.bind(this),
+      refresh: this.refreshToken.bind(this),
+      me: this.me.bind(this),
     };
   }
 
@@ -110,6 +126,15 @@ export default class ApiClient<TResponse extends Record<string, any> = any> {
       this.config.endpoints.login,
       credentials,
     );
+
+    // Auto-set tokens if they exist in response
+    if (res.data.access_token) {
+      this.tokenManager.setToken(res.data.access_token);
+    }
+    if (res.data.refresh_token) {
+      this.tokenManager.setRefreshToken(res.data.refresh_token);
+    }
+
     await this.config.callbacks?.login?.(res.data, this.buildContext());
     return res.data;
   }
@@ -119,6 +144,7 @@ export default class ApiClient<TResponse extends Record<string, any> = any> {
       this.config.endpoints.register,
       credentials,
     );
+
     await this.config.callbacks?.register?.(res.data, this.buildContext());
     return res.data;
   }
@@ -133,9 +159,16 @@ export default class ApiClient<TResponse extends Record<string, any> = any> {
   }
 
   async refreshToken(): Promise<TResponse> {
+    const refreshToken = this.tokenManager.getRefreshToken();
+    if (!refreshToken) {
+      throw new Error("No refresh token available");
+    }
+
     const res = await this.axiosInstance.post<TResponse>(
       this.config.endpoints.refresh,
+      { refresh_token: refreshToken },
     );
+
     await this.config.callbacks?.refresh?.(res.data, this.buildContext());
     return res.data;
   }
@@ -155,5 +188,10 @@ export default class ApiClient<TResponse extends Record<string, any> = any> {
 
   getAxiosInstance() {
     return this.axiosInstance;
+  }
+
+  isAuthenticated(): boolean {
+    const token = this.tokenManager.getToken();
+    return !!token && !this.tokenManager.isTokenExpired();
   }
 }

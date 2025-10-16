@@ -9,12 +9,35 @@ export interface User {
 /** Generic session data (tokens, roles, etc.) */
 export type Session = Record<string, unknown>;
 
+/** Decoded token interface */
+export interface DecodedToken {
+  exp?: number;
+  iat?: number;
+  [key: string]: unknown;
+}
+
 /** Context passed to callbacks */
 export interface MiddlewareContext {
   api: AxiosInstance;
+
+  // Access token methods
   getToken: () => string | null;
   setToken: (token: string) => void;
   removeToken: () => void;
+
+  // Refresh token methods
+  getRefreshToken: () => string | null;
+  setRefreshToken: (token: string) => void;
+  removeRefreshToken: () => void;
+
+  // Combined token methods
+  clearTokens: () => void;
+
+  // Auth actions
+  login: (credentials: Record<string, any>) => Promise<any>;
+  logout: () => Promise<void>;
+  refresh: () => Promise<any>;
+  me: () => Promise<any>;
 }
 
 /** API client configuration */
@@ -52,6 +75,9 @@ export interface RakitConfig<
     /** Called after fetching /me */
     me?: (data: TResponse, ctx: MiddlewareContext) => void | Promise<void>;
   };
+
+  /** Called when refresh token fails */
+  onRefreshFailed?: () => void;
 }
 
 /** Authentication state */
@@ -71,4 +97,13 @@ export interface ApiError {
   message: string;
   status?: number;
   data?: unknown;
+}
+
+/** Token response structure */
+export interface TokenResponse {
+  access_token: string;
+  refresh_token: string;
+  token_type?: string;
+  expires_in?: number;
+  user?: any;
 }
