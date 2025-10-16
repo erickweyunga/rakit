@@ -70,7 +70,12 @@ export function AuthProvider<
       const data = await apiClientRef.current.me();
       setState({ data, isAuthenticated: true, isLoading: false });
     } catch {
-      setState({ data: null, isAuthenticated: false, isLoading: false });
+      setState((prev) => ({
+        ...prev,
+        data: null,
+        isAuthenticated: false,
+        isLoading: false,
+      }));
     }
   }, []);
 
@@ -85,8 +90,14 @@ export function AuthProvider<
       const data = await apiClientRef.current.login(credentials);
       setState({ data, isAuthenticated: true, isLoading: false });
       return data;
-    } finally {
-      setState((prev) => ({ ...prev, isLoading: false }));
+    } catch (error) {
+      setState((prev) => ({
+        ...prev,
+        data: null,
+        isAuthenticated: false,
+        isLoading: false,
+      }));
+      throw error;
     }
   }, []);
 
@@ -97,8 +108,14 @@ export function AuthProvider<
       const data = await apiClientRef.current.register(credentials);
       setState({ data, isAuthenticated: true, isLoading: false });
       return data;
-    } finally {
-      setState((prev) => ({ ...prev, isLoading: false }));
+    } catch (error) {
+      setState((prev) => ({
+        ...prev,
+        data: null,
+        isAuthenticated: false,
+        isLoading: false,
+      }));
+      throw error;
     }
   }, []);
 
