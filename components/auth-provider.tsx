@@ -86,7 +86,6 @@ export function AuthProvider<
           });
         }
       } catch (error) {
-        console.error("Auth initialization failed:", error);
         if (mountedRef.current) {
           setState({
             data: null,
@@ -129,8 +128,6 @@ export function AuthProvider<
         if (mountedRef.current) {
           setState((prev) => ({
             ...prev,
-            data: null,
-            isAuthenticated: false,
             isLoading: false,
           }));
         }
@@ -144,12 +141,18 @@ export function AuthProvider<
     async (credentials: Credentials) => {
       return executeAuthAction(
         async () => {
-          const data = await apiClientRef.current!.login(credentials);
-          return data;
+          await apiClientRef.current!.login(credentials);
+
+          try {
+            const userData = await apiClientRef.current!.me();
+            return userData;
+          } catch (error) {
+            throw new Error("Error during authentication");
+          }
         },
-        (data) => {
+        (userData) => {
           setState({
-            data,
+            data: userData,
             isAuthenticated: true,
             isLoading: false,
           });
@@ -159,24 +162,13 @@ export function AuthProvider<
     [executeAuthAction],
   );
 
-  const register = useCallback(
-    async (credentials: Credentials) => {
-      return executeAuthAction(
-        async () => {
-          const data = await apiClientRef.current!.register(credentials);
-          return data;
-        },
-        (data) => {
-          setState({
-            data,
-            isAuthenticated: true,
-            isLoading: false,
-          });
-        },
-      );
-    },
-    [executeAuthAction],
-  );
+  const register = useCallback(async (credentials: Credentials) => {
+    if (!apiClientRef.current) {
+      throw new Error("ApiClient not initialized");
+    }
+    const data = await apiClientRef.current.register(credentials);
+    return data;
+  }, []);
 
   const logout = useCallback(async () => {
     return executeAuthAction(
