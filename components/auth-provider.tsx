@@ -7,6 +7,7 @@ import React, {
 } from "react";
 import ApiClient from "../core/api-client";
 import type { RakitConfig, AuthState, Credentials } from "../types";
+import TokenManager from "../core/token-manager";
 
 export interface AuthContextValue<
   TResponse extends Record<string, any> = Record<string, any>,
@@ -29,11 +30,23 @@ interface AuthProviderProps<
 export function AuthProvider<
   TResponse extends Record<string, any> = Record<string, any>,
 >({ config, children }: AuthProviderProps<TResponse>): React.ReactElement {
-  const [state, setState] = useState<AuthState<TResponse>>({
-    data: null,
-    isAuthenticated: false,
-    isLoading: true,
-  } as AuthState<TResponse>);
+  const [state, setState] = useState<AuthState<TResponse>>(() => {
+    const tokenManager = new TokenManager(
+      config.tokenKey,
+      config.refreshTokenKey,
+    );
+
+    const hasValidToken = tokenManager.isAuthenticated();
+    const hasRefreshToken = !!tokenManager.getRefreshToken();
+
+    const isAuthenticated = hasValidToken || hasRefreshToken;
+
+    return {
+      data: null,
+      isAuthenticated,
+      isLoading: true,
+    } as AuthState<TResponse>;
+  });
 
   const apiClientRef = useRef<ApiClient<TResponse> | null>(null);
 

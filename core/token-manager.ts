@@ -69,6 +69,11 @@ class TokenManager {
     return decoded.exp * 1000 < Date.now();
   }
 
+  isAuthenticated(): boolean {
+    const token = this.getToken();
+    return !!token && !this.isTokenExpired();
+  }
+
   getTokenExpiration(token?: string): number | null {
     const decoded = this.decodeToken(token);
 

@@ -107,3 +107,9 @@ export interface TokenResponse {
   expires_in?: number;
   user?: any;
 }
+
+export type ProtectionStrategy =
+  | "authenticated" // Default - requires authentication
+  | "unauthenticated" // Requires user to be NOT authenticated (like login page)
+  | "public" // No authentication required (public routes)
+  | "guest";
