@@ -2,6 +2,7 @@ import axios, {
   type AxiosInstance,
   type AxiosRequestConfig,
   AxiosError,
+  type AxiosResponse,
 } from "axios";
 import TokenManager from "./token-manager";
 import type { RakitConfig, MiddlewareContext, ApiError } from "../types";
@@ -167,6 +168,83 @@ export default class ApiClient<TResponse extends Record<string, any> = any> {
     );
     await this.config.callbacks?.me?.(res.data, this.buildContext());
     return res.data;
+  }
+
+  /** ---- GENERIC HTTP METHODS ---- */
+
+  async get<T = any>(url: string, config?: AxiosRequestConfig): Promise<T> {
+    const response = await this.axiosInstance.get<T>(url, config);
+    return response.data;
+  }
+
+  async post<T = any>(
+    url: string,
+    data?: any,
+    config?: AxiosRequestConfig,
+  ): Promise<T> {
+    const response = await this.axiosInstance.post<T>(url, data, config);
+    return response.data;
+  }
+
+  async put<T = any>(
+    url: string,
+    data?: any,
+    config?: AxiosRequestConfig,
+  ): Promise<T> {
+    const response = await this.axiosInstance.put<T>(url, data, config);
+    return response.data;
+  }
+
+  async patch<T = any>(
+    url: string,
+    data?: any,
+    config?: AxiosRequestConfig,
+  ): Promise<T> {
+    const response = await this.axiosInstance.patch<T>(url, data, config);
+    return response.data;
+  }
+
+  async delete<T = any>(url: string, config?: AxiosRequestConfig): Promise<T> {
+    const response = await this.axiosInstance.delete<T>(url, config);
+    return response.data;
+  }
+
+  async head<T = any>(url: string, config?: AxiosRequestConfig): Promise<T> {
+    const response = await this.axiosInstance.head<T>(url, config);
+    return response.data;
+  }
+
+  async options<T = any>(url: string, config?: AxiosRequestConfig): Promise<T> {
+    const response = await this.axiosInstance.options<T>(url, config);
+    return response.data;
+  }
+
+  async request<T = any>(config: AxiosRequestConfig): Promise<T> {
+    const response = await this.axiosInstance.request<T>(config);
+    return response.data;
+  }
+
+  async getWithResponse<T = any>(
+    url: string,
+    config?: AxiosRequestConfig,
+  ): Promise<AxiosResponse<T>> {
+    return await this.axiosInstance.get<T>(url, config);
+  }
+
+  async postWithResponse<T = any>(
+    url: string,
+    data?: any,
+    config?: AxiosRequestConfig,
+  ): Promise<AxiosResponse<T>> {
+    return await this.axiosInstance.post<T>(url, data, config);
+  }
+
+  async putWithResponse<T = any>(
+    url: string,
+    data?: any,
+    config?: AxiosRequestConfig,
+  ): Promise<AxiosResponse<T>> {
+    return await this.axiosInstance.put<T>(url, data, config);
   }
 
   /** ---- UTILITIES ---- */
