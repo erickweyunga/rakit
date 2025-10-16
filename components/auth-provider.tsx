@@ -112,10 +112,6 @@ export function AuthProvider<
         throw new Error("ApiClient not initialized");
       }
 
-      if (mountedRef.current) {
-        setState((prev) => ({ ...prev, isLoading: true }));
-      }
-
       try {
         const result = await action();
 
@@ -125,12 +121,6 @@ export function AuthProvider<
 
         return result;
       } catch (error) {
-        if (mountedRef.current) {
-          setState((prev) => ({
-            ...prev,
-            isLoading: false,
-          }));
-        }
         throw error;
       }
     },
