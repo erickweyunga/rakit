@@ -51,7 +51,13 @@ export default class ApiClient<TResponse extends Record<string, any> = any> {
       async (error: AxiosError<ApiError>) => {
         const originalRequest = error.config as AxiosRequestConfig & {
           _retry?: boolean;
+          _isRefreshRequest?: boolean;
         };
+
+        // Don't intercept refresh token request to avoid infinite loop
+        if (originalRequest._isRefreshRequest) {
+          return Promise.reject(error);
+        }
 
         if (error.response?.status === 401 && !originalRequest._retry) {
           if (this.isRefreshing) {
@@ -153,21 +159,34 @@ export default class ApiClient<TResponse extends Record<string, any> = any> {
       throw new Error("No refresh token available");
     }
 
-    const res = await this.axiosInstance.post<TResponse>(
-      this.config.endpoints.refresh,
-      { refresh_token: refreshToken },
-    );
+    try {
+      const res = await this.axiosInstance.post<TResponse>(
+        this.config.endpoints.refresh,
+        { refresh_token: refreshToken },
+        {
+          _isRefreshRequest: true,
+        } as AxiosRequestConfig,
+      );
 
-    await this.config.callbacks?.refresh?.(res.data, this.buildContext());
-    return res.data;
+      await this.config.callbacks?.refresh?.(res.data, this.buildContext());
+      return res.data;
+    } catch (error) {
+      this.tokenManager.clearTokens();
+      this.config.onRefreshFailed?.();
+      throw error;
+    }
   }
 
   async me(): Promise<TResponse> {
-    const res = await this.axiosInstance.get<TResponse>(
-      this.config.endpoints.me,
-    );
-    await this.config.callbacks?.me?.(res.data, this.buildContext());
-    return res.data;
+    try {
+      const res = await this.axiosInstance.get<TResponse>(
+        this.config.endpoints.me,
+      );
+      await this.config.callbacks?.me?.(res.data, this.buildContext());
+      return res.data;
+    } catch (error) {
+      throw error;
+    }
   }
 
   /** ---- GENERIC HTTP METHODS ---- */

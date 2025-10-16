@@ -125,7 +125,7 @@ function LoginPage() {
 
 // --- Dashboard ---
 function Dashboard() {
-  const { data, logout, refetch } = useAuth<MyUser & MySession>();
+  const { data, logout } = useAuth<MyUser & MySession>();
 
   const user = data?.user as MyUser;
   const session = data;
@@ -140,9 +140,6 @@ function Dashboard() {
       <p>Access Token: {session?.access_token}</p>
       <button onClick={logout} style={{ marginTop: 10 }}>
         Logout
-      </button>
-      <button onClick={refetch} style={{ marginTop: 10, marginLeft: 10 }}>
-        Refresh User
       </button>
     </div>
   );
