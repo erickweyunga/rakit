@@ -22,7 +22,7 @@ export function Outlet({
     return <>{fallback}</>;
   }
 
-  if (!isAuthenticated) {
+  if (!isLoading && !isAuthenticated) {
     return <Navigate to={redirectTo} replace />;
   }
 

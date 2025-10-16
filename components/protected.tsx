@@ -19,7 +19,7 @@ export function Protected({
     return <>{fallback}</>;
   }
 
-  if (!isAuthenticated) {
+  if (!isLoading && !isAuthenticated) {
     return <Navigate to={redirectTo} replace />;
   }
 
